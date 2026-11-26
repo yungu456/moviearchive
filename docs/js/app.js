@@ -17,6 +17,7 @@ const dialog = get("movie-dialog");
 const deleteDialog = get("delete-dialog");
 const detailDialog = get("film-details");
 const detailWatch = get("detail-watch");
+const detailRetryTitle = get("detail-retry-title");
 const reviewDialog = get("review-dialog");
 const reviewForm = get("review-form");
 const saveReviewButton = get("save-review");
@@ -194,7 +195,8 @@ async function openDetails(movie) {
   get("detail-critics-title").parentElement.hidden = !movie.title;
   showPersonalReview(movie);
   updateDetailWatch(movie);
-  detailDialog.showModal();
+  detailRetryTitle.hidden = Boolean(movie.title) || !movie.reelUrl;
+  if (!detailDialog.open) detailDialog.showModal();
   if (!movie.title) return;
 
   if (!movie.poster) {
@@ -217,6 +219,27 @@ async function openDetails(movie) {
 }
 
 get("close-details").addEventListener("click", () => detailDialog.close());
+detailRetryTitle.addEventListener("click", async () => {
+  const request = activeDetails;
+  if (!request || detailRetryTitle.disabled) return;
+  detailRetryTitle.disabled = true;
+  get("detail-intro").textContent = "영화 제목을 다시 찾는 중이에요.";
+  try {
+    const movie = await fillReelTitle(request.movie);
+    if (movie.title) {
+      await refresh().catch(() => {});
+      if (detailDialog.open && activeDetails === request) {
+        const details = openDetails(movie);
+        get("close-details").focus();
+        await details;
+      }
+    } else if (detailDialog.open && activeDetails === request) {
+      get("detail-intro").textContent = "아직 제목을 찾지 못했어요. 수정에서 영화 제목을 직접 입력할 수 있어요.";
+    }
+  } finally {
+    detailRetryTitle.disabled = false;
+  }
+});
 detailWatch.addEventListener("click", () => changeWatched(activeDetails.movie.id, detailWatch));
 get("detail-review-edit").addEventListener("click", () => openReviewDialog(activeDetails.movie, false));
 get("write-review").addEventListener("click", showReviewForm);
