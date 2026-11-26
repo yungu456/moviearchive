@@ -175,6 +175,8 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 .reel-link { display: inline-flex; align-items: center; gap: 4px; flex: none; min-height: 28px; padding-inline: 5px; border-radius: 5px; color: var(--muted); font-size: .8125rem; }
 .reel-link:hover { background: var(--surface); color: var(--accent); }
 .reel-link .icon { width: 15px; height: 15px; }
+.card-title-status { margin: 4px 0 8px; color: var(--muted); font-size: .875rem; }
+.card-retry-title { min-height: 36px; padding: 6px 10px; font-size: .875rem; }
 .card-intro { display: -webkit-box; overflow: hidden; text-overflow: ellipsis; margin-top: 3px; color: var(--muted); font-size: .8125rem; line-height: 1.45; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .poster-source { display: block; width: fit-content; margin: 15px 0 0 auto; color: var(--muted); font-size: .75rem; }
 .poster-source:hover { color: var(--accent); text-decoration: underline; }

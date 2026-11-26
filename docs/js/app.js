@@ -2,7 +2,7 @@ import { BackupError, createBackup, readBackup } from "./backup.js?v=13";
 import { addMovie, deleteMovie, editMovie, listMovies, mergeMovies, saveMovieReview, toggleWatched } from "./db.js?v=13";
 import { lookupPoster } from "./poster-lookup.js?v=14";
 import { lookupFilmDetails, lookupFilmIntroduction } from "./film-details.js?v=14";
-import { fillReelTitle, resolveReelTitle } from "./reel-title.js?v=17";
+import { resolveReelTitle } from "./reel-title.js?v=17";
 import { normalizeSourceUrl, verifiedReelTitle } from "./reel-url.js?v=17";
 
 const get = (id) => document.getElementById(id);
@@ -50,6 +50,66 @@ let reviewing;
 let noticeTimer;
 let retryingTitles = false;
 const lastTitleAttempt = new Map();
+const titleLookups = new Map();
+const titleLookupMessages = {
+  pending: "영화 제목을 찾는 중이에요.",
+  connection: "제목 조회 서버에 연결할 수 없어요.",
+  "upstream-unavailable": "영상 서비스의 공개 정보를 가져오지 못했어요.",
+  "title-not-found": "공개 영상 정보에서 영화 제목을 확인하지 못했어요.",
+  storage: "찾은 제목을 이 기록에 저장하지 못했어요.",
+};
+
+function titleLookupFor(movie) {
+  const lookup = titleLookups.get(movie.id);
+  return lookup?.url === movie.reelUrl ? lookup : undefined;
+}
+
+function showTitleLookup(movie, status, button) {
+  const reason = titleLookupFor(movie)?.reason;
+  status.textContent = titleLookupMessages[reason] ?? "영상 링크를 저장했어요.";
+  button.disabled = reason === "pending";
+}
+
+function updateTitleLookup(movie) {
+  const card = grid.querySelector(`[data-id="${CSS.escape(movie.id)}"]`);
+  if (card && !card.querySelector(".card-title-lookup").hidden) {
+    showTitleLookup(movie, card.querySelector(".card-title-status"), card.querySelector(".card-retry-title"));
+  }
+  if (detailDialog.open && activeDetails.movie.id === movie.id && activeDetails.movie.reelUrl === movie.reelUrl &&
+      !activeDetails.movie.title) {
+    showTitleLookup(movie, get("detail-intro"), detailRetryTitle);
+  }
+}
+
+function lookupMissingTitle(movie) {
+  const existing = titleLookupFor(movie);
+  if (existing?.reason === "pending") return existing.promise;
+
+  const lookup = { url: movie.reelUrl, reason: "pending" };
+  lastTitleAttempt.set(movie.id, Date.now());
+  titleLookups.set(movie.id, lookup);
+  lookup.promise = resolveReelTitle(movie).then(({ movie: updated, reason }) => {
+    lookup.reason = reason;
+    if (titleLookupFor(movie) === lookup && !updated.title) updateTitleLookup(movie);
+    return updated;
+  });
+  updateTitleLookup(movie);
+  return lookup.promise;
+}
+
+async function retryTitle(movie) {
+  const updated = await lookupMissingTitle(movie);
+  if (!updated.title) return;
+  await refresh();
+  if (detailDialog.open && activeDetails.movie.id === updated.id && activeDetails.movie.reelUrl === updated.reelUrl &&
+      !activeDetails.movie.title) {
+    const details = openDetails(updated);
+    get("close-details").focus();
+    await details;
+  } else if (grid.contains(document.activeElement) || document.activeElement === document.body) {
+    focusCard(updated.id, ".title-open");
+  }
+}
 
 function setMessage(id, message = "") {
   const element = get(id);
@@ -198,6 +258,7 @@ async function openDetails(movie) {
   showPersonalReview(movie);
   updateDetailWatch(movie);
   detailRetryTitle.hidden = Boolean(movie.title) || !movie.reelUrl;
+  if (!detailRetryTitle.hidden) showTitleLookup(movie, get("detail-intro"), detailRetryTitle);
   if (!detailDialog.open) detailDialog.showModal();
   if (!movie.title) return;
 
@@ -222,32 +283,8 @@ async function openDetails(movie) {
 
 get("close-details").addEventListener("click", () => detailDialog.close());
 detailRetryTitle.addEventListener("click", async () => {
-  const request = activeDetails;
-  if (!request || detailRetryTitle.disabled) return;
-  detailRetryTitle.disabled = true;
-  get("detail-intro").textContent = "영화 제목을 다시 찾는 중이에요.";
-  try {
-    lastTitleAttempt.set(request.movie.id, Date.now());
-    const { movie, reason } = await resolveReelTitle(request.movie);
-    if (movie.title) {
-      await refresh().catch(() => {});
-      if (detailDialog.open && activeDetails === request) {
-        const details = openDetails(movie);
-        get("close-details").focus();
-        await details;
-      }
-    } else if (detailDialog.open && activeDetails === request) {
-      const messages = {
-        connection: "제목 조회 서버에 연결할 수 없어요. 인터넷 연결을 확인하고 다시 시도해 주세요.",
-        "upstream-unavailable": "영상 서비스에서 공개 정보를 가져오지 못했어요. 잠시 후 다시 시도해 주세요.",
-        "title-not-found": "공개 영상 정보에서 영화 제목을 확인하지 못했어요. 수정에서 직접 입력할 수 있어요.",
-        storage: "찾은 제목을 이 기록에 저장하지 못했어요. 목록을 새로고침한 뒤 다시 시도해 주세요.",
-      };
-      get("detail-intro").textContent = messages[reason] ?? messages["title-not-found"];
-    }
-  } finally {
-    detailRetryTitle.disabled = false;
-  }
+  if (!activeDetails || detailRetryTitle.disabled) return;
+  await retryTitle(activeDetails.movie).catch(() => announce("영화 목록을 갱신하지 못했어요."));
 });
 detailWatch.addEventListener("click", () => changeWatched(activeDetails.movie.id, detailWatch));
 get("detail-review-edit").addEventListener("click", () => openReviewDialog(activeDetails.movie, false));
@@ -286,11 +323,18 @@ function cardFor(movie) {
 
   loadCardPoster(card, movie);
 
-  lookupFilmIntroduction(movie).then((film) => {
-    if (!card.isConnected || !film.intro) return;
-    intro.textContent = film.intro;
-    intro.hidden = false;
-  });
+  if (movie.title) {
+    lookupFilmIntroduction(movie).then((film) => {
+      if (!card.isConnected || !film.intro) return;
+      intro.textContent = film.intro;
+      intro.hidden = false;
+    });
+  } else if (movie.reelUrl) {
+    const retry = card.querySelector(".card-retry-title");
+    card.querySelector(".card-title-lookup").hidden = false;
+    showTitleLookup(movie, card.querySelector(".card-title-status"), retry);
+    retry.addEventListener("click", () => retryTitle(movie).catch(() => announce("영화 목록을 갱신하지 못했어요.")));
+  }
   if (movie.reelUrl) {
     const label = sourceLabel(movie.reelUrl);
     reel.href = movie.reelUrl;
@@ -355,8 +399,7 @@ async function refresh() {
 async function retryMissingTitles() {
   if (!ready || retryingTitles || document.hidden) return;
   const now = Date.now();
-  const pending = movies.filter((movie) => !movie.title && movie.reelUrl &&
-    (!detailDialog.open || activeDetails.movie.id !== movie.id));
+  const pending = movies.filter((movie) => !movie.title && movie.reelUrl);
   const verified = pending.filter((movie) => verifiedReelTitle(movie.reelUrl));
   const remote = navigator.onLine ? pending.filter((movie) =>
     !verifiedReelTitle(movie.reelUrl) && now - (lastTitleAttempt.get(movie.id) ?? 0) > 60000).slice(0, 3) : [];
@@ -364,13 +407,15 @@ async function retryMissingTitles() {
 
   retryingTitles = true;
   try {
-    let changed = false;
     for (const pendingMovie of [...verified, ...remote]) {
-      lastTitleAttempt.set(pendingMovie.id, Date.now());
-      const movie = await fillReelTitle(pendingMovie);
-      changed ||= Boolean(movie.title);
+      const movie = await lookupMissingTitle(pendingMovie);
+      if (!movie.title) continue;
+      await refresh();
+      if (detailDialog.open && activeDetails.movie.id === movie.id && activeDetails.movie.reelUrl === movie.reelUrl &&
+          !activeDetails.movie.title) {
+        openDetails(movie).catch(() => {});
+      }
     }
-    if (changed) await refresh();
   } finally {
     retryingTitles = false;
   }
@@ -473,7 +518,7 @@ form.addEventListener("submit", async (event) => {
 
   try {
     const saved = previous ? await editMovie(previous.id, fields) : await addMovie(fields);
-    const movie = await fillReelTitle(saved);
+    const movie = !saved.title && saved.reelUrl ? await lookupMissingTitle(saved) : saved;
 
     if (!previous) {
       search.value = "";
@@ -629,6 +674,9 @@ function retryWhenVisible() {
 
 window.addEventListener("online", retryWhenVisible);
 document.addEventListener("visibilitychange", retryWhenVisible);
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted) refresh().then(retryWhenVisible).catch(() => {});
+});
 
 refresh().then(() => {
   showShareResult();

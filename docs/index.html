@@ -7,9 +7,9 @@
   <meta name="theme-color" content="#101110">
   <meta name="referrer" content="no-referrer">
   <title>MovieArchive · 보고 싶은 영화</title>
-  <link rel="stylesheet" href="./css/styles.css?v=13">
+  <link rel="stylesheet" href="./css/styles.css?v=18">
   <link rel="manifest" href="./manifest.webmanifest">
-  <script type="module" src="./js/app.js?v=17"></script>
+  <script type="module" src="./js/app.js?v=18"></script>
 </head>
 <body>
   <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -230,6 +230,10 @@
           <a class="reel-link" target="_blank" rel="noopener noreferrer" hidden><svg class="icon" aria-hidden="true"><use href="#icon-link"/></svg><span></span></a>
         </div>
         <p class="card-intro" hidden></p>
+        <div class="card-title-lookup" hidden>
+          <p class="card-title-status" role="status"></p>
+          <button class="button button-secondary card-retry-title" type="button">제목 다시 찾기</button>
+        </div>
       </div>
     </article>
   </template>
