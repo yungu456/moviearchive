@@ -2,8 +2,8 @@ import { BackupError, createBackup, readBackup } from "./backup.js?v=13";
 import { addMovie, deleteMovie, editMovie, listMovies, mergeMovies, saveMovieReview, toggleWatched } from "./db.js?v=13";
 import { lookupPoster } from "./poster-lookup.js?v=14";
 import { lookupFilmDetails, lookupFilmIntroduction } from "./film-details.js?v=14";
-import { fillReelTitle } from "./reel-title.js?v=16";
-import { normalizeSourceUrl, verifiedReelTitle } from "./reel-url.js?v=16";
+import { fillReelTitle, resolveReelTitle } from "./reel-title.js?v=17";
+import { normalizeSourceUrl, verifiedReelTitle } from "./reel-url.js?v=17";
 
 const get = (id) => document.getElementById(id);
 const grid = get("movie-grid");
@@ -48,6 +48,8 @@ let editing;
 let activeDetails;
 let reviewing;
 let noticeTimer;
+let retryingTitles = false;
+const lastTitleAttempt = new Map();
 
 function setMessage(id, message = "") {
   const element = get(id);
@@ -225,7 +227,8 @@ detailRetryTitle.addEventListener("click", async () => {
   detailRetryTitle.disabled = true;
   get("detail-intro").textContent = "영화 제목을 다시 찾는 중이에요.";
   try {
-    const movie = await fillReelTitle(request.movie);
+    lastTitleAttempt.set(request.movie.id, Date.now());
+    const { movie, reason } = await resolveReelTitle(request.movie);
     if (movie.title) {
       await refresh().catch(() => {});
       if (detailDialog.open && activeDetails === request) {
@@ -234,7 +237,13 @@ detailRetryTitle.addEventListener("click", async () => {
         await details;
       }
     } else if (detailDialog.open && activeDetails === request) {
-      get("detail-intro").textContent = "아직 제목을 찾지 못했어요. 수정에서 영화 제목을 직접 입력할 수 있어요.";
+      const messages = {
+        connection: "제목 조회 서버에 연결할 수 없어요. 인터넷 연결을 확인하고 다시 시도해 주세요.",
+        "upstream-unavailable": "영상 서비스에서 공개 정보를 가져오지 못했어요. 잠시 후 다시 시도해 주세요.",
+        "title-not-found": "공개 영상 정보에서 영화 제목을 확인하지 못했어요. 수정에서 직접 입력할 수 있어요.",
+        storage: "찾은 제목을 이 기록에 저장하지 못했어요. 목록을 새로고침한 뒤 다시 시도해 주세요.",
+      };
+      get("detail-intro").textContent = messages[reason] ?? messages["title-not-found"];
     }
   } finally {
     detailRetryTitle.disabled = false;
@@ -341,6 +350,30 @@ async function refresh() {
   openBackup.disabled = false;
   render();
   renderHero();
+}
+
+async function retryMissingTitles() {
+  if (!ready || retryingTitles || document.hidden) return;
+  const now = Date.now();
+  const pending = movies.filter((movie) => !movie.title && movie.reelUrl &&
+    (!detailDialog.open || activeDetails.movie.id !== movie.id));
+  const verified = pending.filter((movie) => verifiedReelTitle(movie.reelUrl));
+  const remote = navigator.onLine ? pending.filter((movie) =>
+    !verifiedReelTitle(movie.reelUrl) && now - (lastTitleAttempt.get(movie.id) ?? 0) > 60000).slice(0, 3) : [];
+  if (!verified.length && !remote.length) return;
+
+  retryingTitles = true;
+  try {
+    let changed = false;
+    for (const pendingMovie of [...verified, ...remote]) {
+      lastTitleAttempt.set(pendingMovie.id, Date.now());
+      const movie = await fillReelTitle(pendingMovie);
+      changed ||= Boolean(movie.title);
+    }
+    if (changed) await refresh();
+  } finally {
+    retryingTitles = false;
+  }
 }
 
 function focusCard(id, selector) {
@@ -590,11 +623,16 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register(new URL("./sw.js", document.baseURI), { type: "module" }).catch(() => {});
 }
 
-refresh().then(async () => {
+function retryWhenVisible() {
+  retryMissingTitles().catch(() => {});
+}
+
+window.addEventListener("online", retryWhenVisible);
+document.addEventListener("visibilitychange", retryWhenVisible);
+
+refresh().then(() => {
   showShareResult();
-  const pending = movies.filter((movie) => !movie.title && verifiedReelTitle(movie.reelUrl));
-  const repaired = await Promise.all(pending.map(fillReelTitle));
-  if (repaired.some((movie) => movie.title)) await refresh();
+  retryWhenVisible();
 }).catch((error) => {
   emptyState.textContent = error?.message === "다른 MovieArchive 탭을 닫고 새로고침해 주세요."
     ? error.message

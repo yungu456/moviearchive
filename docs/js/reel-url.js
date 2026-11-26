@@ -6,7 +6,12 @@ const verifiedReelTitles = new Map([
 ]);
 
 export function verifiedReelTitle(reelUrl) {
-  return verifiedReelTitles.get(reelUrl);
+  if (typeof reelUrl !== "string") return undefined;
+  try {
+    return verifiedReelTitles.get(normalizeSourceUrl(reelUrl));
+  } catch {
+    return undefined;
+  }
 }
 
 export function normalizeSourceUrl(input) {
