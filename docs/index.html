@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#101110">
+  <meta name="referrer" content="no-referrer">
+  <title>MovieArchive · 보고 싶은 영화</title>
+  <link rel="stylesheet" href="./css/styles.css?v=13">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <script type="module" src="./js/app.js?v=14"></script>
+</head>
+<body>
+  <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="icon-film" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18M17 3v18M3 8h4M3 16h4M17 8h4M17 16h4"/></symbol>
+    <symbol id="icon-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="icon-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="icon-pencil" viewBox="0 0 24 24"><path d="m15 5 4 4M4 20l4.5-1 11-11a2.8 2.8 0 0 0-4-4l-11 11z"/></symbol>
+    <symbol id="icon-link" viewBox="0 0 24 24"><path d="m10 13 4-4m-6 6-1 1a3 3 0 0 1-4-4l4-4a3 3 0 0 1 4 0m2 1 2-2a3 3 0 0 1 4 4l-4 4a3 3 0 0 1-4 0"/></symbol>
+    <symbol id="icon-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="icon-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5"/></symbol>
+    <symbol id="icon-backup" viewBox="0 0 24 24"><path d="M4 6h16v4H4zm1 4v9h14v-9m-9 4h4"/></symbol>
+  </svg>
+
+  <header class="topbar">
+    <div class="shell topbar-content">
+      <a class="brand" href="./" aria-label="MovieArchive 홈">
+        <span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#icon-film"/></svg></span>
+        <span>Movie<span class="brand-accent">Archive</span></span>
+      </a>
+      <div class="topbar-actions">
+        <button class="button button-secondary" id="open-backup" type="button" aria-label="백업 및 복원" title="백업 및 복원" disabled>
+          <svg class="icon" aria-hidden="true"><use href="#icon-backup"/></svg><span>백업 · 복원</span>
+        </button>
+        <button class="button button-primary" id="add-movie" type="button" disabled>
+          <svg class="icon" aria-hidden="true"><use href="#icon-plus"/></svg> 영화 저장
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="hero" aria-labelledby="page-title">
+      <div class="hero-content">
+        <h1 id="page-title">영상에서 찾은<br><em>보고 싶은 영화</em></h1>
+        <p>릴스나 쇼츠 링크를 저장하면 영화 제목과 포스터를 찾아요.</p>
+        <dl class="stats">
+          <div><dt>전체</dt><dd id="total-count">–</dd></div>
+          <div><dt>시청 전</dt><dd id="unwatched-count">–</dd></div>
+          <div><dt>시청 완료</dt><dd id="watched-count">–</dd></div>
+        </dl>
+      </div>
+      <div class="hero-art" aria-hidden="true">
+        <div class="hero-strip">
+          <span><img alt="" decoding="async" hidden></span>
+          <span><img alt="" decoding="async" hidden></span>
+          <span><img alt="" decoding="async" hidden></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="library" aria-labelledby="library-title">
+      <div class="library-heading">
+        <div class="heading-title">
+          <h2 id="library-title" tabindex="-1">저장한 영화</h2>
+          <span id="result-count" class="result-count" aria-live="polite"></span>
+        </div>
+        <label class="search">
+          <svg class="icon" aria-hidden="true"><use href="#icon-search"/></svg>
+          <input id="search" type="search" aria-label="영화 제목 또는 감상평 검색" placeholder="영화 제목 또는 감상평 검색">
+        </label>
+      </div>
+      <div class="library-controls">
+        <div class="filters" role="group" aria-label="시청 상태 분류">
+          <button type="button" data-filter="all" aria-pressed="true">전체</button>
+          <button type="button" data-filter="unwatched" aria-pressed="false">시청 전</button>
+          <button type="button" data-filter="watched" aria-pressed="false">시청 완료</button>
+        </div>
+        <div class="library-options">
+          <span id="sample-note" class="sample-note" hidden>예시 영화 포함</span>
+          <label id="watched-sort-control" class="sort-control" hidden>
+            <span>정렬</span>
+            <select id="watched-sort">
+              <option value="saved">저장순</option>
+              <option value="watched">시청순</option>
+              <option value="rating">점수순</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div id="movie-grid" class="movie-grid"></div>
+      <p id="empty-state" class="empty-state" role="status">영화 목록을 불러오는 중입니다.</p>
+    </section>
+  </main>
+
+  <p id="notice" class="notice" role="status" aria-atomic="true"></p>
+  <noscript><p class="shell">영화를 관리하려면 브라우저에서 JavaScript를 켜 주세요.</p></noscript>
+
+  <dialog id="film-details" class="film-details" aria-labelledby="detail-title">
+    <div class="dialog-heading">
+      <div>
+        <h2 id="detail-title"></h2>
+        <p id="detail-meta" class="detail-meta" hidden></p>
+      </div>
+      <button id="close-details" class="icon-button" type="button" aria-label="닫기" autofocus><svg class="icon" aria-hidden="true"><use href="#icon-close"/></svg></button>
+    </div>
+    <section class="detail-intro" aria-labelledby="detail-intro-title">
+      <h3 id="detail-intro-title">영화 소개</h3>
+      <p id="detail-intro" role="status"></p>
+      <a id="intro-source" class="detail-link" target="_blank" rel="noopener noreferrer" hidden>소개 출처</a>
+    </section>
+    <section class="detail-critics" aria-labelledby="detail-critics-title">
+      <h3 id="detail-critics-title">평론가의 시선</h3>
+      <p id="detail-reviews-status" class="detail-meta" role="status" hidden></p>
+      <ul id="detail-reviews" class="detail-reviews"></ul>
+    </section>
+    <section id="detail-personal-review" class="detail-intro" aria-labelledby="personal-review-title" hidden>
+      <div class="personal-review-heading">
+        <h3 id="personal-review-title">내 감상평</h3>
+        <button id="detail-review-edit" class="detail-link" type="button">작성하기</button>
+      </div>
+      <p id="personal-rating" hidden></p>
+      <p id="personal-review-text" hidden></p>
+    </section>
+    <div class="dialog-actions">
+      <button id="detail-watch" class="button button-secondary" type="button" aria-label="시청 완료" aria-pressed="false">시청 전</button>
+      <a id="detail-reel" class="button button-secondary" target="_blank" rel="noopener noreferrer" hidden>원본 영상</a>
+      <button id="detail-edit" class="button button-primary" type="button">영화 수정</button>
+    </div>
+    <a id="poster-source" class="poster-source" target="_blank" rel="noopener noreferrer" hidden></a>
+  </dialog>
+
+  <dialog id="review-dialog" aria-labelledby="review-dialog-title" aria-describedby="review-film-title">
+    <div class="dialog-heading">
+      <h2 id="review-dialog-title">감상평을 작성하시겠습니까?</h2>
+      <button class="icon-button" type="button" data-close aria-label="닫기"><svg class="icon" aria-hidden="true"><use href="#icon-close"/></svg></button>
+    </div>
+    <p id="review-film-title" class="detail-meta"></p>
+    <div id="review-prompt" class="dialog-actions">
+      <button id="review-later" class="button button-secondary" type="button" data-close>나중에</button>
+      <button id="write-review" class="button button-primary" type="button">작성하기</button>
+    </div>
+    <form id="review-form" hidden>
+      <label for="review-rating">감상 점수</label>
+      <select id="review-rating" name="rating">
+        <option value="">점수 선택</option>
+        <option value="1">1점</option>
+        <option value="2">2점</option>
+        <option value="3">3점</option>
+        <option value="4">4점</option>
+        <option value="5">5점</option>
+      </select>
+      <label for="review-draft">감상평</label>
+      <textarea id="review-draft" name="review" maxlength="4000" rows="4" placeholder="영화를 보고 든 생각을 남겨보세요."></textarea>
+      <p id="review-error" class="form-error" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <button class="button button-secondary" type="button" data-close>취소</button>
+        <button id="save-review" class="button button-primary" type="submit">저장</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="movie-dialog" aria-labelledby="form-title">
+    <form id="movie-form" novalidate>
+      <div class="dialog-heading">
+        <h2 id="form-title">영화 저장</h2>
+        <button class="icon-button" type="button" data-close aria-label="닫기"><svg class="icon" aria-hidden="true"><use href="#icon-close"/></svg></button>
+      </div>
+      <label for="reel-url">릴스 또는 쇼츠 링크</label>
+      <input id="reel-url" name="reelUrl" type="url" maxlength="2048" placeholder="복사한 영상 링크를 붙여넣으세요" autocomplete="off">
+      <label for="movie-title">영화 제목</label>
+      <input id="movie-title" name="title" maxlength="160" placeholder="비워두면 영상 정보에서 제목을 찾아요">
+      <label for="release-year">개봉 연도</label>
+      <input id="release-year" name="releaseYear" type="number" inputmode="numeric" min="1800" max="2099" placeholder="선택 사항">
+      <label for="review">감상평</label>
+      <textarea id="review" name="review" maxlength="4000" rows="3" placeholder="영화를 보고 든 생각을 남겨보세요."></textarea>
+      <p id="form-error" class="form-error" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <button id="delete-movie" class="button text-danger" type="button" hidden><svg class="icon" aria-hidden="true"><use href="#icon-trash"/></svg> 삭제</button>
+        <button class="button button-secondary" type="button" data-close>취소</button>
+        <button class="button button-primary" type="submit">저장</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="delete-dialog" aria-labelledby="delete-title" aria-describedby="delete-message">
+    <div class="dialog-heading"><h2 id="delete-title">영화 삭제</h2></div>
+    <p id="delete-message"></p>
+    <p id="delete-error" class="form-error" role="alert" hidden></p>
+    <div class="dialog-actions">
+      <button class="button button-secondary" type="button" data-close autofocus>취소</button>
+      <button id="confirm-delete" class="button button-danger" type="button">삭제</button>
+    </div>
+  </dialog>
+
+  <dialog id="backup-dialog" aria-labelledby="backup-title">
+    <div class="dialog-heading">
+      <h2 id="backup-title">백업 및 복원</h2>
+      <button class="icon-button" type="button" data-close aria-label="닫기"><svg class="icon" aria-hidden="true"><use href="#icon-close"/></svg></button>
+    </div>
+    <p class="backup-description">영화 기록과 포스터를 JSON 파일로 저장할 수 있어요. 복원할 때는 기존 기록을 우선하고 같은 영화 ID나 영상 링크는 한 번만 저장해요.</p>
+    <input id="backup-file" type="file" accept=".json,application/json" hidden>
+    <p id="backup-status" class="backup-status" role="status" hidden></p>
+    <p id="backup-error" class="form-error" role="alert" hidden></p>
+    <div class="dialog-actions">
+      <button id="import-backup" class="button button-secondary" type="button">JSON 복원</button>
+      <button id="export-backup" class="button button-primary" type="button">JSON 백업</button>
+    </div>
+  </dialog>
+
+  <template id="movie-card">
+    <article class="movie-card">
+      <div class="poster">
+        <button class="poster-open" type="button">
+          <span class="poster-placeholder"><svg class="icon" aria-hidden="true"><use href="#icon-film"/></svg></span>
+          <img class="poster-image" alt="" decoding="async" loading="lazy" hidden>
+        </button>
+        <button class="watch-status" type="button">
+          <svg class="icon" aria-hidden="true"><use/></svg><span></span>
+        </button>
+        <button class="icon-button edit-movie" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-pencil"/></svg></button>
+      </div>
+      <div class="card-info">
+        <div class="card-heading">
+          <h3><button class="title-open" type="button"></button></h3>
+          <a class="reel-link" target="_blank" rel="noopener noreferrer" hidden><svg class="icon" aria-hidden="true"><use href="#icon-link"/></svg><span></span></a>
+        </div>
+        <p class="card-intro" hidden></p>
+      </div>
+    </article>
+  </template>
+</body>
+</html>
