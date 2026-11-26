@@ -1,6 +1,13 @@
 const INSTAGRAM_HOSTS = new Set(["instagram.com", "www.instagram.com", "m.instagram.com"]);
 const YOUTUBE_HOSTS = new Set(["youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"]);
 const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
+const verifiedReelTitles = new Map([
+  ["https://www.instagram.com/reel/DZARatCoe8N/", "월플라워"],
+]);
+
+export function verifiedReelTitle(reelUrl) {
+  return verifiedReelTitles.get(reelUrl);
+}
 
 export function normalizeSourceUrl(input) {
   const value = input.trim();

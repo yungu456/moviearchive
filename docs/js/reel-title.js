@@ -1,9 +1,14 @@
 import { fillMovieTitle } from "./db.js?v=13";
 import { reelTitleEndpoint } from "./settings.js";
+import { verifiedReelTitle } from "./reel-url.js?v=16";
 
 export async function fillReelTitle(movie) {
   if (!movie.reelUrl || movie.title) return movie;
   try {
+    const verifiedTitle = verifiedReelTitle(movie.reelUrl);
+    if (verifiedTitle) {
+      return (await fillMovieTitle(movie.id, movie.reelUrl, verifiedTitle)) ?? movie;
+    }
     const response = await fetch(reelTitleEndpoint, {
       method: "POST",
       body: new URLSearchParams({ reelUrl: movie.reelUrl }),

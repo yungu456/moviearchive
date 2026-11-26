@@ -1,17 +1,18 @@
 import { saveSharedSource } from "./js/db.js?v=13";
-import { fillReelTitle } from "./js/reel-title.js?v=13";
-import { extractSharedSource } from "./js/reel-url.js";
+import { fillReelTitle } from "./js/reel-title.js?v=16";
+import { extractSharedSource } from "./js/reel-url.js?v=16";
 
 const root = new URL(self.registration.scope);
 const home = new URL("./", root).href;
 const index = new URL("./index.html", root).href;
 const sharePath = new URL("./share-target", root).pathname;
 const cachePrefix = `moviearchive:${root.pathname}:`;
-const cacheName = cachePrefix + "v15";
+const cacheName = cachePrefix + "v16";
 const assets = new Set([
   "./", "./index.html", "./manifest.webmanifest", "./css/styles.css?v=13",
-  "./js/app.js?v=15", "./js/backup.js?v=13", "./js/db.js?v=13", "./js/poster.js",
-  "./js/reel-url.js", "./js/reel-title.js?v=13", "./js/settings.js", "./js/poster-lookup.js?v=14", "./js/film-details.js?v=14",
+  "./js/app.js?v=16", "./js/backup.js?v=13", "./js/db.js?v=13", "./js/poster.js",
+  "./js/reel-url.js", "./js/reel-url.js?v=16", "./js/reel-title.js?v=16",
+  "./js/settings.js", "./js/poster-lookup.js?v=14", "./js/film-details.js?v=14",
   "./icons/icon-192.png", "./icons/icon-512.png",
 ].map((path) => new URL(path, root).href));
 

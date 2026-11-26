@@ -2,8 +2,8 @@ import { BackupError, createBackup, readBackup } from "./backup.js?v=13";
 import { addMovie, deleteMovie, editMovie, listMovies, mergeMovies, saveMovieReview, toggleWatched } from "./db.js?v=13";
 import { lookupPoster } from "./poster-lookup.js?v=14";
 import { lookupFilmDetails, lookupFilmIntroduction } from "./film-details.js?v=14";
-import { fillReelTitle } from "./reel-title.js?v=13";
-import { normalizeSourceUrl } from "./reel-url.js";
+import { fillReelTitle } from "./reel-title.js?v=16";
+import { normalizeSourceUrl, verifiedReelTitle } from "./reel-url.js?v=16";
 
 const get = (id) => document.getElementById(id);
 const grid = get("movie-grid");
@@ -590,7 +590,12 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register(new URL("./sw.js", document.baseURI), { type: "module" }).catch(() => {});
 }
 
-refresh().then(showShareResult).catch((error) => {
+refresh().then(async () => {
+  showShareResult();
+  const pending = movies.filter((movie) => !movie.title && verifiedReelTitle(movie.reelUrl));
+  const repaired = await Promise.all(pending.map(fillReelTitle));
+  if (repaired.some((movie) => movie.title)) await refresh();
+}).catch((error) => {
   emptyState.textContent = error?.message === "다른 MovieArchive 탭을 닫고 새로고침해 주세요."
     ? error.message
     : "영화 목록을 열 수 없어요. 브라우저의 사이트 저장소 설정을 확인한 뒤 새로고침해 주세요.";
