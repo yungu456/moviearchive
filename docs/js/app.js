@@ -1,7 +1,7 @@
 import { BackupError, createBackup, readBackup } from "./backup.js?v=13";
 import { addMovie, deleteMovie, editMovie, listMovies, mergeMovies, saveMovieReview, toggleWatched } from "./db.js?v=13";
-import { lookupPoster } from "./poster-lookup.js?v=19";
-import { lookupFilmDetails, lookupFilmIntroduction } from "./film-details.js?v=19";
+import { lookupFallbackPoster, lookupPoster } from "./poster-lookup.js?v=20";
+import { lookupFilmDetails, lookupFilmIntroduction } from "./film-details.js?v=20";
 import { resolveReelTitle } from "./reel-title.js?v=17";
 import { normalizeSourceUrl, verifiedReelTitle } from "./reel-url.js?v=17";
 
@@ -71,7 +71,7 @@ function showTitleLookup(movie, status, button) {
 }
 
 function updateTitleLookup(movie) {
-  const card = grid.querySelector(`[data-id="${CSS.escape(movie.id)}"]`);
+  const card = renderedCard(movie.id);
   if (card && !card.querySelector(".card-title-lookup").hidden) {
     showTitleLookup(movie, card.querySelector(".card-title-status"), card.querySelector(".card-retry-title"));
   }
@@ -131,12 +131,34 @@ function sourceLabel(url) {
   return url?.startsWith("https://www.youtube.com/") ? "쇼츠" : "릴스";
 }
 
-function setPosterImage(image, url) {
+function setPosterImage(image, url, onError) {
   image.onerror = () => {
     image.hidden = true;
+    onError?.();
   };
   image.src = url;
   image.hidden = false;
+}
+
+async function showRemotePoster(image, movie, isCurrent, onLoad) {
+  const failedImages = new Set();
+  function show(poster) {
+    if (!poster || !isCurrent()) return;
+    image.onload = () => {
+      if (isCurrent()) onLoad?.(poster.source);
+    };
+    const url = poster.image;
+    setPosterImage(image, url, async () => {
+      if (!isCurrent()) return;
+      failedImages.add(url);
+      show(await lookupFallbackPoster(movie, failedImages));
+    });
+  }
+  show(await lookupPoster(movie));
+}
+
+function renderedCard(id) {
+  return grid.querySelector(`[data-id="${CSS.escape(id)}"]`);
 }
 
 function loadCardPoster(card, movie) {
@@ -148,9 +170,11 @@ function loadCardPoster(card, movie) {
     return;
   }
   if (!movie.title) return;
-  lookupPoster(movie).then((poster) => {
-    if (!poster || !card.isConnected) return;
-    setPosterImage(image, poster.image);
+  showRemotePoster(image, movie, () => card.isConnected, (source) => {
+    card.dataset.posterSource = source;
+    if (detailDialog.open && activeDetails.movie.id === movie.id && activeDetails.movie.title === movie.title) {
+      setPosterSource(source);
+    }
   });
 }
 
@@ -164,9 +188,7 @@ function renderHero() {
     image.hidden = true;
     image.removeAttribute("src");
     if (!featured[index]) return;
-    lookupPoster(featured[index]).then((poster) => {
-      if (poster && featuredMovies === featured) setPosterImage(image, poster.image);
-    });
+    showRemotePoster(image, featured[index], () => featuredMovies === featured);
   });
 }
 
@@ -265,7 +287,7 @@ async function openDetails(movie) {
   if (!movie.poster) {
     lookupPoster(movie).then((poster) => {
       if (detailDialog.open && activeDetails === request) {
-        setPosterSource(poster?.source);
+        setPosterSource(renderedCard(movie.id)?.dataset.posterSource ?? poster?.source);
       }
     });
   }

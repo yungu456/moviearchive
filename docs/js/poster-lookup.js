@@ -1,4 +1,5 @@
 const lookupCache = new Map();
+const fallbackCache = new Map();
 const filmPageCache = new Map();
 const imageHosts = new Set(["upload.wikimedia.org", "thumb.wikimedia.org"]);
 const lookupLimit = 160;
@@ -49,7 +50,7 @@ async function pagesFor(language, query, exact = false) {
   const url = new URL(`https://${language}.wikipedia.org/w/api.php`);
   url.search = new URLSearchParams({
     action: "query", format: "json", formatversion: "2", origin: "*",
-    prop: "pageimages|pageterms|langlinks", piprop: "name|thumbnail", pithumbsize: "330",
+    prop: "pageimages|pageterms|langlinks", piprop: "name|thumbnail", pithumbsize: "330", pilimit: "max",
     pilicense: "any", wbptterms: "description", lllang: "en", redirects: "1",
     ...(exact ? { titles: query } : { generator: "prefixsearch", gpssearch: query, gpslimit: "12" }),
   });
@@ -149,5 +150,52 @@ export function lookupPoster(movie) {
     lookupQueue = lookup;
     lookupCache.set(key, lookup);
   }
-  return lookupCache.get(key);
+  return lookupCache.get(key).then((result) => result ?? lookupFallbackPoster(movie));
+}
+
+async function summaryPosters({ title, releaseYear }) {
+  const language = /\p{Script=Hangul}/u.test(title) ? "ko" : "en";
+  const suffix = language === "ko" ? "영화" : "film";
+  const yearSuffix = language === "ko" ? "년" : "";
+  const variants = [title];
+  if (releaseYear) variants.push(`${title} (${releaseYear}${yearSuffix} ${suffix})`);
+  variants.push(`${title} (${suffix})`);
+
+  for (const name of new Set(variants)) {
+    const url = new URL(`/api/rest_v1/page/summary/${encodeURIComponent(name.replaceAll(" ", "_"))}`,
+      `https://${language}.wikipedia.org`);
+    const response = await fetch(url, {
+      credentials: "omit", referrerPolicy: "no-referrer", signal: AbortSignal.timeout(3500),
+    });
+    if (response.status === 404) continue;
+    if (!response.ok) throw new Error("Wikipedia summary lookup failed");
+    const summary = await response.json();
+    const page = { title: summary.title ?? "", terms: { description: [summary.description ?? ""] } };
+    const year = filmYear(page) ?? summary.extract?.match(/\b((?:18|19|20)\d{2})(?:년)?(?=\s*(?:[\w-]+\s+){0,6}(?:film\b|영화))/i)?.[1];
+    if (summary.type !== "standard" || !isMatchingFilm(page, titleKey(title)) ||
+        (releaseYear && year !== String(releaseYear))) continue;
+
+    const original = summary.originalimage ?? summary.thumbnail;
+    if (!original?.source) continue;
+    const pageimage = decodeURIComponent(new URL(original.source).pathname.split("/").at(-1));
+    const posters = [original, summary.thumbnail].map((thumbnail) =>
+      posterFrom({ pageimage, thumbnail }, language)).filter(Boolean);
+    if (posters.length) return posters;
+  }
+  return [];
+}
+
+export async function lookupFallbackPoster(movie, failedImages) {
+  const title = movie.title?.trim();
+  if (!title || title.length > lookupLimit) return null;
+  const key = JSON.stringify([title, movie.releaseYear]);
+  if (!fallbackCache.has(key)) {
+    const lookup = summaryPosters({ ...movie, title }).catch(() => []).then((posters) => {
+      if (!posters.length) fallbackCache.delete(key);
+      return posters;
+    });
+    fallbackCache.set(key, lookup);
+  }
+  const posters = await fallbackCache.get(key);
+  return posters.find(({ image }) => !failedImages?.has(image)) ?? null;
 }
