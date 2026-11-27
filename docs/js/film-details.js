@@ -1,5 +1,5 @@
 import { lookupFilmPage, lookupFilmSummary } from "./poster-lookup.js?v=22";
-import { articleDocument, fetchArticle, isFilmArticle, openingPlot, receptionExcerpt } from "./article-content.js?v=24";
+import { articleDocument, fetchArticle, isFilmArticle, openingPlot, receptionExcerpt } from "./article-content.js?v=25";
 import { reelTitleEndpoint } from "./settings.js?v=17";
 
 const watcha = (id, summary) => ({

@@ -1,3 +1,5 @@
+import { reelTitleEndpoint } from "./settings.js?v=17";
+
 const articleCache = new Map();
 
 function sectionElements(document, labels) {
@@ -90,8 +92,17 @@ export async function fetchArticle(language, title) {
         action: "parse", page: title, prop: "text", format: "json", formatversion: "2",
         origin: "*", disableeditsection: "1", redirects: "1",
       });
-      const fallback = await get(action);
-      return fallback?.ok ? (await fallback.json()).parse?.text ?? "" : "";
+      if (response?.status !== 429) {
+        const fallback = await get(action);
+        const text = fallback?.ok ? (await fallback.json()).parse?.text : undefined;
+        if (text) return text;
+      }
+      const endpoint = new URL("film-article", reelTitleEndpoint);
+      const fallback = await fetch(endpoint, {
+        method: "POST", body: new URLSearchParams({ language, title }), credentials: "omit",
+        referrerPolicy: "no-referrer", signal: AbortSignal.timeout(5500),
+      });
+      return fallback.ok ? (await fallback.json()).html ?? "" : "";
     })().catch(() => "").then((html) => {
       if (!html) articleCache.delete(cacheKey);
       return html;

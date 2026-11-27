@@ -1,7 +1,7 @@
 import { BackupError, createBackup, readBackup } from "./backup.js?v=13";
 import { addMovie, deleteMovie, editMovie, listMovies, mergeMovies, saveMovieReview, toggleWatched } from "./db.js?v=13";
 import { lookupFallbackPoster, lookupPoster } from "./poster-lookup.js?v=22";
-import { lookupFilmIntroduction, lookupFilmReviews } from "./film-details.js?v=24";
+import { lookupFilmIntroduction, lookupFilmReviews } from "./film-details.js?v=25";
 import { resolveReelTitle } from "./reel-title.js?v=17";
 import { normalizeSourceUrl, verifiedReelTitle } from "./reel-url.js?v=17";
 
@@ -41,6 +41,7 @@ const cardTemplate = get("movie-card");
 const heroImages = [...document.querySelectorAll(".hero-strip img")];
 
 const posterUrls = [];
+let cardIntroQueue = Promise.resolve();
 let movies = [];
 let ready = false;
 let filter = "all";
@@ -349,11 +350,13 @@ function cardFor(movie) {
   loadCardPoster(card, movie);
 
   if (movie.title) {
-    lookupFilmIntroduction(movie).then((film) => {
+    cardIntroQueue = cardIntroQueue.then(async () => {
+      if (!card.isConnected) return;
+      const film = await lookupFilmIntroduction(movie);
       if (!card.isConnected || !film.intro) return;
       intro.textContent = film.intro;
       intro.hidden = false;
-    });
+    }).catch(() => {});
   } else if (movie.reelUrl) {
     const retry = card.querySelector(".card-retry-title");
     card.querySelector(".card-title-lookup").hidden = false;
