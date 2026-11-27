@@ -1,7 +1,7 @@
 import { BackupError, createBackup, readBackup } from "./backup.js?v=13";
 import { addMovie, deleteMovie, editMovie, listMovies, mergeMovies, saveMovieReview, toggleWatched } from "./db.js?v=13";
 import { lookupFallbackPoster, lookupPoster } from "./poster-lookup.js?v=22";
-import { lookupFilmIntroduction, lookupFilmReviews } from "./film-details.js?v=22";
+import { lookupFilmIntroduction, lookupFilmReviews } from "./film-details.js?v=23";
 import { resolveReelTitle } from "./reel-title.js?v=17";
 import { normalizeSourceUrl, verifiedReelTitle } from "./reel-url.js?v=17";
 
@@ -301,7 +301,9 @@ async function openDetails(movie) {
   const reviews = await lookupFilmReviews(movie, details).catch(() => []);
   if (!detailDialog.open || activeDetails !== request) return;
   get("detail-reviews").replaceChildren(...reviews.map(reviewItem));
-  setMessage("detail-reviews-status", reviews.length ? "" : "확인된 평론을 찾지 못했어요.");
+  setMessage("detail-reviews-status", reviews.length >= 2 ? "" : reviews.length === 1
+    ? "내용을 확인한 평론은 1편이에요."
+    : "공개된 평론 내용을 확인하지 못했어요.");
 }
 
 get("close-details").addEventListener("click", () => detailDialog.close());
