@@ -157,9 +157,9 @@ async function summaryPosters({ title, releaseYear }) {
   const language = /\p{Script=Hangul}/u.test(title) ? "ko" : "en";
   const suffix = language === "ko" ? "영화" : "film";
   const yearSuffix = language === "ko" ? "년" : "";
-  const variants = [title];
+  const variants = [];
   if (releaseYear) variants.push(`${title} (${releaseYear}${yearSuffix} ${suffix})`);
-  variants.push(`${title} (${suffix})`);
+  variants.push(title, `${title} (${suffix})`);
 
   for (const name of new Set(variants)) {
     const url = new URL(`/api/rest_v1/page/summary/${encodeURIComponent(name.replaceAll(" ", "_"))}`,
@@ -167,8 +167,7 @@ async function summaryPosters({ title, releaseYear }) {
     const response = await fetch(url, {
       credentials: "omit", referrerPolicy: "no-referrer", signal: AbortSignal.timeout(3500),
     });
-    if (response.status === 404) continue;
-    if (!response.ok) throw new Error("Wikipedia summary lookup failed");
+    if (!response.ok) continue;
     const summary = await response.json();
     const page = { title: summary.title ?? "", terms: { description: [summary.description ?? ""] } };
     const year = filmYear(page) ?? summary.extract?.match(/\b((?:18|19|20)\d{2})(?:년)?(?=\s*(?:[\w-]+\s+){0,6}(?:film\b|영화))/i)?.[1];

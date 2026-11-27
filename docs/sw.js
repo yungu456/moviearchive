@@ -7,12 +7,12 @@ const home = new URL("./", root).href;
 const index = new URL("./index.html", root).href;
 const sharePath = new URL("./share-target", root).pathname;
 const cachePrefix = `moviearchive:${root.pathname}:`;
-const cacheName = cachePrefix + "v20";
+const cacheName = cachePrefix + "v21";
 const assets = new Set([
   "./", "./index.html", "./manifest.webmanifest", "./css/styles.css?v=18",
-  "./js/app.js?v=20", "./js/backup.js?v=13", "./js/db.js?v=13", "./js/poster.js",
+  "./js/app.js?v=21", "./js/backup.js?v=13", "./js/db.js?v=13", "./js/poster.js",
   "./js/reel-url.js", "./js/reel-url.js?v=17", "./js/reel-title.js?v=17",
-  "./js/settings.js?v=17", "./js/poster-lookup.js?v=20", "./js/film-details.js?v=20",
+  "./js/settings.js?v=17", "./js/poster-lookup.js?v=21", "./js/film-details.js?v=21",
   "./icons/icon-192.png", "./icons/icon-512.png",
 ].map((path) => new URL(path, root).href));
 

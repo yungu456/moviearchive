@@ -1,7 +1,7 @@
 import { BackupError, createBackup, readBackup } from "./backup.js?v=13";
 import { addMovie, deleteMovie, editMovie, listMovies, mergeMovies, saveMovieReview, toggleWatched } from "./db.js?v=13";
-import { lookupFallbackPoster, lookupPoster } from "./poster-lookup.js?v=20";
-import { lookupFilmDetails, lookupFilmIntroduction } from "./film-details.js?v=20";
+import { lookupFallbackPoster, lookupPoster } from "./poster-lookup.js?v=21";
+import { lookupFilmDetails, lookupFilmIntroduction } from "./film-details.js?v=21";
 import { resolveReelTitle } from "./reel-title.js?v=17";
 import { normalizeSourceUrl, verifiedReelTitle } from "./reel-url.js?v=17";
 
