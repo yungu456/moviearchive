@@ -1,5 +1,5 @@
 import { lookupFilmPage, lookupFilmSummary } from "./poster-lookup.js?v=22";
-import { articleDocument, fetchArticle, openingPlot, receptionExcerpt } from "./article-content.js?v=23";
+import { articleDocument, fetchArticle, isFilmArticle, openingPlot, receptionExcerpt } from "./article-content.js?v=24";
 import { reelTitleEndpoint } from "./settings.js?v=17";
 
 const watcha = (id, summary) => ({
@@ -228,13 +228,21 @@ export async function lookupFilmIntroduction(movie) {
     known?.titles.find((title) => !/\p{Script=Hangul}/u.test(title));
   const reviewTitle = language === "en" ? localTitle : film?.englishTitle ?? knownEnglish;
   const details = { ...known, year: known?.year ?? fallback?.year, reviewTitle, item: fallback?.summary.wikibase_item };
-  const variants = localTitle ? [[language, localTitle]] : [];
+  const variants = localTitle ? [[language, localTitle, true]] : [];
   if (reviewTitle && (language !== "en" || !localTitle)) variants.push(["en", reviewTitle]);
-  for (const [wiki, title] of variants) {
+  if (!localTitle && !reviewTitle) {
+    variants.push([/\p{Script=Hangul}/u.test(movie.title) ? "ko" : "en", movie.title.trim()]);
+  }
+  for (const [wiki, title, identified] of variants) {
     const html = await fetchArticle(wiki, title);
     if (!html) continue;
-    const intro = openingPlot(articleDocument(html), wiki);
-    if (intro) return { ...details, intro, source: filmArticle(wiki, title) + (wiki === "ko" ? "#줄거리" : "#Plot") };
+    const document = articleDocument(html);
+    if (!identified && !isFilmArticle(document, known?.year ?? movie.releaseYear)) continue;
+    const intro = openingPlot(document, wiki);
+    if (intro) return {
+      ...details, intro, reviewTitle: details.reviewTitle ?? (wiki === "en" ? title : undefined),
+      source: filmArticle(wiki, title) + (wiki === "ko" ? "#줄거리" : "#Plot"),
+    };
   }
   return details;
 }

@@ -45,6 +45,15 @@ export function openingPlot(document, language) {
   return excerpt(opening.join(" "), 24);
 }
 
+export function isFilmArticle(document, year) {
+  const credits = document.querySelector("table.infobox");
+  if (!credits || ![...credits.querySelectorAll("th")].some((cell) =>
+    /^(?:directed by|감독)$/i.test(cell.textContent.trim()))) return false;
+  if (!year) return true;
+  const lead = document.querySelector('section[data-mw-section-id="0"] p, .mw-parser-output > p');
+  return new RegExp(`\\b${year}\\b`).test(credits.textContent + (lead?.textContent ?? ""));
+}
+
 export function receptionExcerpt(document, author) {
   const elements = sectionElements(document, /^(?:critical reception|critical response|critical reviews|reception)$/i);
   const splitter = new Intl.Segmenter("en", { granularity: "sentence" });
