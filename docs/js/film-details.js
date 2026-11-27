@@ -1,4 +1,4 @@
-import { lookupFilmPage } from "./poster-lookup.js?v=14";
+import { lookupFilmPage } from "./poster-lookup.js?v=19";
 
 const watcha = (id, summary) => ({
   author: "이동진", publisher: "왓챠피디아", summary, url: `https://pedia.watcha.com/ko/comments/${id}`,

@@ -6,6 +6,11 @@ let lookupQueue = Promise.resolve();
 
 const verifiedPosters = [
   {
+    localTitle: "파이트 클럽", originalTitle: "Fight Club", year: 1999, language: "en",
+    filename: "Fight_Club_poster.jpg", imagePath: "/wikipedia/en/f/fc/Fight_Club_poster.jpg",
+    host: "upload.wikimedia.org",
+  },
+  {
     localTitle: "기생충", originalTitle: "Parasite", year: 2019, originalTitleNeedsYear: true,
     filename: "기생충_포스터.jpg", imagePath: "/wikipedia/ko/6/60/기생충_포스터.jpg",
     host: "upload.wikimedia.org",
@@ -32,7 +37,7 @@ function verifiedPoster(title, year) {
   if (!poster) return null;
   return {
     image: new URL(poster.imagePath, `https://${poster.host}`).href,
-    source: new URL(`/wiki/File:${poster.filename}`, "https://ko.wikipedia.org").href,
+    source: new URL(`/wiki/File:${poster.filename}`, `https://${poster.language ?? "ko"}.wikipedia.org`).href,
   };
 }
 
