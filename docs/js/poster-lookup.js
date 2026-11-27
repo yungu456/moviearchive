@@ -1,5 +1,6 @@
 const lookupCache = new Map();
 const fallbackCache = new Map();
+const summaryCache = new Map();
 const filmPageCache = new Map();
 const imageHosts = new Set(["upload.wikimedia.org", "thumb.wikimedia.org"]);
 const lookupLimit = 160;
@@ -153,7 +154,7 @@ export function lookupPoster(movie) {
   return lookupCache.get(key).then((result) => result ?? lookupFallbackPoster(movie));
 }
 
-async function summaryPosters({ title, releaseYear }) {
+async function findFilmSummary({ title, releaseYear }) {
   const language = /\p{Script=Hangul}/u.test(title) ? "ko" : "en";
   const suffix = language === "ko" ? "영화" : "film";
   const yearSuffix = language === "ko" ? "년" : "";
@@ -166,22 +167,43 @@ async function summaryPosters({ title, releaseYear }) {
       `https://${language}.wikipedia.org`);
     const response = await fetch(url, {
       credentials: "omit", referrerPolicy: "no-referrer", signal: AbortSignal.timeout(3500),
-    });
-    if (!response.ok) continue;
-    const summary = await response.json();
+    }).catch(() => null);
+    if (!response?.ok) continue;
+    const summary = await response.json().catch(() => null);
+    if (!summary) continue;
     const page = { title: summary.title ?? "", terms: { description: [summary.description ?? ""] } };
     const year = filmYear(page) ?? summary.extract?.match(/\b((?:18|19|20)\d{2})(?:년)?(?=\s*(?:[\w-]+\s+){0,6}(?:film\b|영화))/i)?.[1];
     if (summary.type !== "standard" || !isMatchingFilm(page, titleKey(title)) ||
         (releaseYear && year !== String(releaseYear))) continue;
 
-    const original = summary.originalimage ?? summary.thumbnail;
-    if (!original?.source) continue;
-    const pageimage = decodeURIComponent(new URL(original.source).pathname.split("/").at(-1));
-    const posters = [original, summary.thumbnail].map((thumbnail) =>
-      posterFrom({ pageimage, thumbnail }, language)).filter(Boolean);
-    if (posters.length) return posters;
+    return { summary, language, year };
   }
-  return [];
+  return null;
+}
+
+export async function lookupFilmSummary(movie) {
+  const title = movie.title?.trim();
+  if (!title || title.length > lookupLimit) return null;
+  const key = JSON.stringify([title, movie.releaseYear]);
+  if (!summaryCache.has(key)) {
+    const lookup = findFilmSummary({ ...movie, title }).then((film) => {
+      if (!film) summaryCache.delete(key);
+      return film;
+    });
+    summaryCache.set(key, lookup);
+  }
+  return summaryCache.get(key);
+}
+
+async function summaryPosters(movie) {
+  const film = await lookupFilmSummary(movie);
+  if (!film) return [];
+  const { summary, language } = film;
+  const original = summary.originalimage ?? summary.thumbnail;
+  if (!original?.source) return [];
+  const pageimage = decodeURIComponent(new URL(original.source).pathname.split("/").at(-1));
+  return [original, summary.thumbnail].map((thumbnail) =>
+    posterFrom({ pageimage, thumbnail }, language)).filter(Boolean);
 }
 
 export async function lookupFallbackPoster(movie, failedImages) {

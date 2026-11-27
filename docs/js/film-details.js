@@ -1,4 +1,4 @@
-import { lookupFilmPage } from "./poster-lookup.js?v=21";
+import { lookupFilmPage, lookupFilmSummary } from "./poster-lookup.js?v=22";
 
 const watcha = (id, summary) => ({
   author: "이동진", publisher: "왓챠피디아", summary, url: `https://pedia.watcha.com/ko/comments/${id}`,
@@ -91,6 +91,16 @@ const publishers = new Map([
   ["nytimes.com", "The New York Times"],
 ]);
 const detailCache = new Map();
+const fightClub = {
+  year: 1999,
+  intro: "일상에 염증을 느끼던 남자가 자유분방한 타일러를 만나 비밀 격투 모임을 만든다. 브래드 피트와 에드워드 노턴이 주연한 데이비드 핀처의 영화다.",
+  source: "https://www.20thcenturystudios.com/movies/fight-club",
+  reviews: [
+    ebert("로저 이버트", "fight-club-1999", "초반부의 풍자와 연출은 높게 평가했지만, 영화가 폭력을 다루는 방식에는 비판적이었다."),
+    guardian("피터 브래드쇼", "2024/mar/13/fight-club-review-prescient-tremendously-acted-classic-still-feels-overblown",
+      "배우들의 연기와 시대를 앞서 읽은 면은 호평하면서도 영화의 과장된 표현에는 거리를 뒀다."),
+  ],
+};
 
 function key(value) {
   return value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
@@ -107,7 +117,7 @@ export function findReviewLinks(html, title) {
   if (titleKey.length < 3) return [];
   const reviews = new Map();
   for (const citation of template.content.querySelectorAll("cite")) {
-    const link = citation.querySelector("a.external[href]");
+    const link = citation.querySelector("a.external[href], a[rel~='mw:ExtLink'][href]");
     if (!link?.textContent.trim()) continue;
     let url;
     try {
@@ -117,8 +127,12 @@ export function findReviewLinks(html, title) {
     }
     if (url.protocol !== "https:" || url.port || url.username || url.password) continue;
     const publisher = publishers.get(url.hostname.replace(/^www\./, ""));
-    if (!publisher || !/review/i.test(url.pathname + " " + link.textContent) ||
-        !key(link.textContent + url.pathname).includes(titleKey)) continue;
+    if (!publisher || !/review/i.test(url.pathname + " " + link.textContent)) continue;
+    const label = link.textContent.trim().replace(/^(?:(?:movie|film) )?review\s*:\s*/i, "")
+      .split(/\s+(?:(?:(?:movie|film) )?review\b|\((?:18|19|20)\d{2}\))/i)[0];
+    const slug = url.pathname.split("/").filter(Boolean).at(-1)?.replace(/^great-movie-/, "")
+      .replace(/-(?:movie-review-|film-review-|review-)?(?:18|19|20)\d{2}$/, "");
+    if (key(label) !== titleKey && (!slug || key(slug) !== titleKey)) continue;
     const prefix = key(citation.textContent.split(link.textContent)[0]);
     const author = [...critics].find(([name]) => {
       const names = name.split(" ");
@@ -131,7 +145,7 @@ export function findReviewLinks(html, title) {
   return [...reviews.values()];
 }
 
-async function fetchReviews(englishTitle) {
+async function fetchCitationReviews(englishTitle) {
   if (!englishTitle) return [];
   const endpoint = new URL("https://en.wikipedia.org/w/api.php");
   endpoint.search = new URLSearchParams({
@@ -146,6 +160,43 @@ async function fetchReviews(englishTitle) {
   return parse?.text ? findReviewLinks(parse.text, englishTitle) : [];
 }
 
+async function fetchArticleReviews(title) {
+  const endpoint = new URL(`/w/rest.php/v1/page/${encodeURIComponent(title.replaceAll(" ", "_"))}/html`,
+    "https://en.wikipedia.org");
+  endpoint.searchParams.set("origin", "*");
+  const response = await fetch(endpoint, {
+    credentials: "omit", referrerPolicy: "no-referrer", signal: AbortSignal.timeout(5000),
+  });
+  return response.ok ? findReviewLinks(await response.text(), title) : [];
+}
+
+async function fetchReviews(title, verified) {
+  const reviews = await fetchCitationReviews(title).catch(() => []);
+  if (reviews.length >= 2) return reviews;
+  const fallback = verified ?? await fetchArticleReviews(title).catch(() => []);
+  const authors = new Set(reviews.map(({ author }) => author));
+  return [...reviews, ...fallback.filter(({ author }) => !authors.has(author))].slice(0, 3);
+}
+
+async function englishArticle(item) {
+  if (!/^Q\d+$/.test(item ?? "")) return undefined;
+  const endpoint = new URL("https://www.wikidata.org/w/api.php");
+  endpoint.search = new URLSearchParams({
+    action: "wbgetentities", ids: item, props: "sitelinks", sitefilter: "enwiki", format: "json", origin: "*",
+  });
+  const response = await fetch(endpoint, {
+    credentials: "omit", referrerPolicy: "no-referrer", signal: AbortSignal.timeout(3500),
+  });
+  if (!response.ok) return undefined;
+  const { entities } = await response.json();
+  return entities?.[item]?.sitelinks?.enwiki?.title;
+}
+
+function fightClubDetails(movie) {
+  return (!movie.releaseYear || movie.releaseYear === fightClub.year) &&
+    ["fightclub", "파이트클럽"].includes(key(movie.title ?? "")) ? fightClub : undefined;
+}
+
 export function featuredFilm(movie) {
   const title = key(movie.title ?? "");
   return featured.find((film) =>
@@ -157,23 +208,41 @@ export async function lookupFilmIntroduction(movie) {
   const known = featuredFilm(movie);
   if (known) return known;
   if (!movie.title) return {};
+  const verified = fightClubDetails(movie);
+  if (verified) return { intro: verified.intro, source: verified.source, year: verified.year, reviewTitle: "Fight Club" };
   const film = await lookupFilmPage(movie);
-  if (!film) return {};
-  const { page, language, englishTitle, englishPage } = film;
-  const intro = page.terms?.description?.[0] ?? englishPage?.terms?.description?.[0];
-  const source = filmArticle(language, page.title);
-  const reviewTitle = language === "en" ? page.title : englishTitle;
-  return { intro, source, reviewTitle };
+  if (film) {
+    const { page, language, englishTitle, englishPage } = film;
+    const intro = page.terms?.description?.[0] ?? englishPage?.terms?.description?.[0];
+    const reviewTitle = language === "en" ? page.title : englishTitle;
+    if (intro?.trim()) return { intro, source: filmArticle(language, page.title), reviewTitle };
+  }
+  const fallback = await lookupFilmSummary(movie);
+  if (!fallback) return {};
+  const { summary, language, year } = fallback;
+  return {
+    intro: summary.description?.trim() || (year ? `${year}년에 공개된 영화예요.` : undefined),
+    source: filmArticle(language, summary.title),
+    year,
+    reviewTitle: language === "en" ? summary.title : film?.englishTitle,
+    item: summary.wikibase_item,
+  };
 }
 
-export async function lookupFilmDetails(movie) {
-  const { reviewTitle, ...details } = await lookupFilmIntroduction(movie);
-  if (!reviewTitle) return details;
-  if (!detailCache.has(reviewTitle)) {
-    detailCache.set(reviewTitle, fetchReviews(reviewTitle).catch(() => {
-      detailCache.delete(reviewTitle);
-      return [];
-    }));
+export async function lookupFilmReviews(movie, details) {
+  if (details.reviews) return details.reviews;
+  let reviewTitle = details.reviewTitle;
+  if (!reviewTitle) {
+    const item = details.item ?? (await lookupFilmSummary(movie))?.summary.wikibase_item;
+    reviewTitle = await englishArticle(item).catch(() => undefined);
   }
-  return { ...details, reviews: await detailCache.get(reviewTitle) };
+  if (!reviewTitle) return [];
+  if (!detailCache.has(reviewTitle)) {
+    const lookup = fetchReviews(reviewTitle, fightClubDetails(movie)?.reviews).then((reviews) => {
+      if (!reviews.length) detailCache.delete(reviewTitle);
+      return reviews;
+    });
+    detailCache.set(reviewTitle, lookup);
+  }
+  return detailCache.get(reviewTitle);
 }

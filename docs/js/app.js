@@ -1,7 +1,7 @@
 import { BackupError, createBackup, readBackup } from "./backup.js?v=13";
 import { addMovie, deleteMovie, editMovie, listMovies, mergeMovies, saveMovieReview, toggleWatched } from "./db.js?v=13";
-import { lookupFallbackPoster, lookupPoster } from "./poster-lookup.js?v=21";
-import { lookupFilmDetails, lookupFilmIntroduction } from "./film-details.js?v=21";
+import { lookupFallbackPoster, lookupPoster } from "./poster-lookup.js?v=22";
+import { lookupFilmIntroduction, lookupFilmReviews } from "./film-details.js?v=22";
 import { resolveReelTitle } from "./reel-title.js?v=17";
 import { normalizeSourceUrl, verifiedReelTitle } from "./reel-url.js?v=17";
 
@@ -292,13 +292,14 @@ async function openDetails(movie) {
     });
   }
 
-  const details = await lookupFilmDetails(movie).catch(() => ({}));
+  const details = await lookupFilmIntroduction(movie).catch(() => ({}));
   if (!detailDialog.open || activeDetails !== request) return;
   const year = details.year ?? movie.releaseYear;
   setMessage("detail-meta", [year, details.genre].filter(Boolean).join(" · "));
   get("detail-intro").textContent = details.intro || "확인된 영화 소개가 없어요.";
   setDetailLink(get("intro-source"), details.intro ? details.source : undefined);
-  const reviews = details.reviews ?? [];
+  const reviews = await lookupFilmReviews(movie, details).catch(() => []);
+  if (!detailDialog.open || activeDetails !== request) return;
   get("detail-reviews").replaceChildren(...reviews.map(reviewItem));
   setMessage("detail-reviews-status", reviews.length ? "" : "확인된 평론을 찾지 못했어요.");
 }
